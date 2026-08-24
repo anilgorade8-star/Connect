@@ -1,85 +1,169 @@
-import { Server } from "socket.io";
+const gotMessageFromServer = async (
+  fromId,
+  message
+) => {
+  try {
+    console.log(
+      "SIGNAL RECEIVED FROM:",
+      fromId
+    );
 
-let connections = {};
-let message = {};
-let timeOnline = {};
-export const connectToSocket = (server) => {
-  const io = new Server(server, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
-      allowedHeaders: ["*"],
-      credentials: true,
-    },
-  });
+    const signal = JSON.parse(message);
 
-  io.on("connection", (socket) => {
-    socket.on("join-call", (path) => {
-      if (connections[path] === undefined) {
-        connections[path] = [];
-      }
-      connections[path].push(socket.id);
-      timeOnline[socket.id] = new Date();
+    const peer = connections.current[fromId];
 
-      for (let a = 0; a < connections[path].length; a++) {
-        io.to(connections[path][a]).emit("user-joined", socket.id);
-      }
-    });
+    if (!peer) {
+      console.log(
+        "Peer not found:",
+        fromId
+      );
+      return;
+    }
 
-    socket.on("signal", (toID, message) => {
-      io.to(toID).emit("signal", socket.id, message);
-    });
-    socket.on("chat-message", (data, sender) => {
-      const [matchinRoom, found] = Object.entries(connections).reduce(
-        ([room, isFound], [roomKey, roomValue]) => {
-          if (!isFound && roomValue.includes(socket.id)) {
-            return [roomKey, true];
-          }
-          return [room, isFound];
-        },
-        ["", false],
+    // =====================================
+    // SDP
+    // =====================================
+
+    if (signal.sdp) {
+      console.log(
+        "RECEIVED SDP:",
+        signal.sdp.type
       );
 
-      if (found === true) {
-        if (message[matchinRoom] === undefined) {
-          message[matchinRoom] = [];
-        }
-        message[matchinRoom].push({
-          sender: sender,
-          data: data,
-          "socket-id-sender": socket.id,
-        });
-        console.log("message", matchinRoom, ":", sender, data);
-        connections[matchinRoom].forEach((element) => {
-          io.to(element).emit("chat-message", data, sender, socket.id);
-        });
-      }
-    });
+      await peer.setRemoteDescription(
+        new RTCSessionDescription(
+          signal.sdp
+        )
+      );
 
-    socket.on("disconnect", () => {
-      var diffTime = Math.abs(timeOnline[socket.id] - new Date());
-      var key;
-      for (const [key, v] of JSON.parse(
-        JSON.stringify(Object.entries(connections)),
-      )) {
-        for (let a = 0; a < v.length; ++a) {
-          if (v[a] === socket.id) {
-            key = key;
-            for (let a = 0; a < connections[key].length; ++a) {
-              io.to(connections[key][a]).emit("user-left", socket.id);
-            }
-            var index = connections[key].indexOf(socket.id);
+      console.log(
+        "REMOTE DESCRIPTION SET:",
+        fromId
+      );
 
-            connections[key].splice(index, 1);
+      // ===================================
+      // ADD QUEUED ICE CANDIDATES
+      // ===================================
 
-            if (connections[key].length === 0) {
-              delete connections[key];
-            }
+      if (
+        iceCandidatesQueue.current[fromId]
+      ) {
+        for (
+          const candidate of
+            iceCandidatesQueue.current[
+              fromId
+            ]
+        ) {
+          try {
+            await peer.addIceCandidate(
+              new RTCIceCandidate(
+                candidate
+              )
+            );
+          } catch (error) {
+            console.error(
+              "Queued ICE error:",
+              error
+            );
           }
         }
-      }
-    });
-  });
 
-  return io;
+        delete iceCandidatesQueue.current[
+          fromId
+        ];
+      }
+
+      // ===================================
+      // OFFER -> ANSWER
+      // ===================================
+
+      if (
+        signal.sdp.type === "offer"
+      ) {
+        console.log(
+          "Creating ANSWER for:",
+          fromId
+        );
+
+        const answer =
+          await peer.createAnswer();
+
+        await peer.setLocalDescription(
+          answer
+        );
+
+        console.log(
+          "Sending ANSWER to:",
+          fromId
+        );
+
+        socketRef.current.emit(
+          "signal",
+          fromId,
+          JSON.stringify({
+            sdp: peer.localDescription,
+          })
+        );
+      }
+    }
+
+    // =====================================
+    // ICE CANDIDATE
+    // =====================================
+
+    if (signal.ice) {
+      console.log(
+        "RECEIVED ICE FROM:",
+        fromId
+      );
+
+      // Remote description not ready yet
+      if (!peer.remoteDescription) {
+        console.log(
+          "Queueing ICE candidate:",
+          fromId
+        );
+
+        if (
+          !iceCandidatesQueue.current[
+            fromId
+          ]
+        ) {
+          iceCandidatesQueue.current[
+            fromId
+          ] = [];
+        }
+
+        iceCandidatesQueue.current[
+          fromId
+        ].push(signal.ice);
+
+        return;
+      }
+
+      // Remote description ready
+      try {
+        await peer.addIceCandidate(
+          new RTCIceCandidate(
+            signal.ice
+          )
+        );
+
+        console.log(
+          "ICE ADDED:",
+          fromId
+        );
+      } catch (error) {
+        console.error(
+          "ICE error:",
+          error
+        );
+      }
+    }
+  } catch (error) {
+    console.error(
+      "SIGNAL ERROR:",
+      error
+    );
+  }
 };
