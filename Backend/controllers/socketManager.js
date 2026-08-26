@@ -50,9 +50,9 @@ const gotMessageFromServer = async (
       ) {
         for (
           const candidate of
-            iceCandidatesQueue.current[
-              fromId
-            ]
+          iceCandidatesQueue.current[
+          fromId
+          ]
         ) {
           try {
             await peer.addIceCandidate(
@@ -126,7 +126,7 @@ const gotMessageFromServer = async (
 
         if (
           !iceCandidatesQueue.current[
-            fromId
+          fromId
           ]
         ) {
           iceCandidatesQueue.current[

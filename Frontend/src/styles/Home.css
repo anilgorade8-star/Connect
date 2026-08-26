@@ -1,0 +1,46 @@
+.home-page {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #f5f6fb;
+  background: radial-gradient(circle at 12% 15%, #312a67 0, transparent 30%), radial-gradient(circle at 90% 85%, #16475b 0, transparent 30%), #10121b;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.home-header {
+  position: absolute;
+  top: 26px;
+  left: clamp(24px, 5vw, 70px);
+  right: clamp(24px, 5vw, 70px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.join-card {
+  width: min(100%, 440px);
+  padding: 42px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 24px;
+  background: rgb(27 30 44 / 88%);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 32%);
+}
+
+.home-brand { display: flex; gap: 9px; align-items: center; font-size: 16px; font-weight: 760; }
+.home-brand span { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 9px; background: linear-gradient(135deg, #7c5cff, #4094f8); text-transform: uppercase; }
+.home-actions { display: flex; gap: 10px; }
+.history-button, .logout-button { padding: 9px 13px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 9px; color: #e9ebf4; background: rgb(255 255 255 / 7%); font: inherit; font-size: 13px; cursor: pointer; }
+.history-button:hover, .logout-button:hover { background: rgb(255 255 255 / 14%); }
+.home-eyebrow { margin: 0 0 11px; color: #9b87ff; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.join-card h1 { margin: 0; font-size: 36px; letter-spacing: -.045em; }
+.home-copy { margin: 13px 0 30px; color: #a9afc1; font-size: 15px; line-height: 1.6; }
+.join-form { display: grid; gap: 9px; }
+.join-form label { color: #e2e4ee; font-size: 13px; font-weight: 650; }
+.join-form input { width: 100%; padding: 14px 15px; border: 1px solid #3c4258; border-radius: 11px; outline: none; color: #f5f6fb; background: #202433; font: inherit; }
+.join-form input:focus { border-color: #8368f8; box-shadow: 0 0 0 4px rgb(131 104 248 / 15%); }
+.join-form button { margin-top: 7px; padding: 14px; border: 0; border-radius: 11px; color: #fff; background: linear-gradient(100deg, #7656ef, #588cf5); font: inherit; font-weight: 750; cursor: pointer; transition: transform .2s, filter .2s; }
+.join-form button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.join-error { margin: 0; color: #ff9ca9; font-size: 13px; }
+@media (max-width: 480px) { .home-header { top: 17px; left: 18px; right: 18px; } .home-actions { gap: 6px; } .history-button, .logout-button { padding: 7px 9px; } .join-card { padding: 30px 24px; } .join-card h1 { font-size: 31px; } }

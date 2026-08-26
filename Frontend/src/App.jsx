@@ -4,6 +4,8 @@ import Landing from "./pages/Landing";
 import Authentication from "./pages/authentication";
 import { AuthProvider } from "./contexts/AuthContext";
 import VideoMeet from "./pages/VideoMeet";
+import History from "./pages/History";
+import Home from "./pages/Home";
 function App() {
   return (
     <BrowserRouter>
@@ -11,7 +13,11 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Authentication />} />
-          <Route path="/:url" element={<VideoMeet/>}/>
+          <Route path="/home" element={<Home/>}/>
+          <Route path="/auth/home" element={<Home/>}/>
+          <Route path="/auth/:url" element={<VideoMeet />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/:url" element={<VideoMeet />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

@@ -1,4 +1,10 @@
+import "dotenv/config";
+import cors from "cors";
+import express from "express";
+import { createServer } from "http";
+import mongoose from "mongoose";
 import { Server } from "socket.io";
+import usersRouter from "./routes/usersroutes.js";
 
 let connections = {};
 let message = {};
@@ -185,3 +191,35 @@ export const connectToSocket = (server) => {
 
   return io;
 };
+
+const app = express();
+const server = createServer(app);
+const port = process.env.PORT || 8080;
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
+app.use(express.json());
+app.use("/api/v1/users", usersRouter);
+
+connectToSocket(server);
+
+const startServer = async () => {
+  await mongoose.connect(process.env.MONGODB_URI);
+
+  server.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error("Unable to start server:", error);
+  process.exit(1);
+});
