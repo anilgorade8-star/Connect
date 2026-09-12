@@ -5,17 +5,12 @@ import { useNavigate } from "react-router-dom";
 import server from "../environment";
 import { AuthContext } from "./auth-context";
 
-
 const client = axios.create({
   baseURL: `${server}/api/v1/users`
-})
-
+});
 
 export const AuthProvider = ({ children }) => {
-
   const [userData, setUserData] = useState({});
-
-
   const router = useNavigate();
 
   const handleRegister = async (name, username, password) => {
@@ -24,8 +19,7 @@ export const AuthProvider = ({ children }) => {
         name: name,
         username: username,
         password: password
-      })
-
+      });
 
       if (request.status === httpStatus.CREATED) {
         await handleLogin(username, password);
@@ -34,7 +28,7 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       throw err;
     }
-  }
+  };
 
   const handleLogin = async (username, password) => {
     try {
@@ -43,17 +37,14 @@ export const AuthProvider = ({ children }) => {
         password: password
       });
 
-      console.log(username, password)
-      console.log(request.data)
-
       if (request.status === httpStatus.OK) {
         localStorage.setItem("token", request.data.token);
-        router("/auth/home")
+        router("/home");
       }
     } catch (err) {
       throw err;
     }
-  }
+  };
 
   const getHistoryOfUser = async () => {
     try {
@@ -62,12 +53,11 @@ export const AuthProvider = ({ children }) => {
           token: localStorage.getItem("token")
         }
       });
-      return request.data
-    } catch
-    (err) {
+      return request.data;
+    } catch (err) {
       throw err;
     }
-  }
+  };
 
   const addToUserHistory = async (meetingCode) => {
     try {
@@ -75,21 +65,24 @@ export const AuthProvider = ({ children }) => {
         token: localStorage.getItem("token"),
         meeting_code: meetingCode
       });
-      return request
+      return request;
     } catch (e) {
       throw e;
     }
-  }
-
+  };
 
   const data = {
-    userData, setUserData, addToUserHistory, getHistoryOfUser, handleRegister, handleLogin
-  }
+    userData,
+    setUserData,
+    addToUserHistory,
+    getHistoryOfUser,
+    handleRegister,
+    handleLogin
+  };
 
   return (
     <AuthContext.Provider value={data}>
       {children}
     </AuthContext.Provider>
-  )
-
-}
+  );
+};
