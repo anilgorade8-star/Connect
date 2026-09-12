@@ -69,29 +69,33 @@
   width: auto;
 }
 .landingPageContainer #link {
-  background: linear-gradient(135deg, #ff9839 0%, #ffb366 100%);
+  background: #ff9839;
   width: fit-content;
-  padding: 16px 40px;
+  padding: 14px 34px;
   text-decoration: none;
-  border-radius: 12px;
-  margin-top: 20px;
+  border-radius: 10px;
+  margin-top: 24px;
   font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 8px 25px rgba(255, 152, 57, 0.3);
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(255, 152, 57, 0.25);
   display: inline-block;
+  cursor: pointer;
 }
 .landingPageContainer #link:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 35px rgba(255, 152, 57, 0.4);
+  background: #e68528;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 152, 57, 0.35);
 }
 .landingPageContainer #link:active {
-  transform: translateY(-1px);
+  transform: translateY(0);
 }
 #link a {
   text-decoration: none;
-  color: white;
-  font-size: 1.1rem;
+  color: #ffffff;
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  display: block;
 }
 /* Authentication */
 .login-page {
