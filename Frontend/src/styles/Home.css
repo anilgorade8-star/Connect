@@ -23,24 +23,19 @@
 
 .home-brand {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   align-items: center;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: -0.02em;
 }
 
 .home-brand span {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border-radius: 8px;
-  background: #ff9839;
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 900;
+  color: #ff9839;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .home-actions {

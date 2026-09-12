@@ -22,7 +22,7 @@ function HomeComponent() {
   return (
     <main className="home-page">
       <header className="home-header">
-        <div className="home-brand"><span>Z</span> Connect</div>
+        <div className="home-brand"><span>|</span> Connect</div>
         <div className="home-actions">
           <button type="button" className="history-button" onClick={() => navigate("/history")}>History</button>
           <button type="button" className="logout-button" onClick={() => { localStorage.removeItem("token"); navigate("/auth"); }}>Log out</button>
