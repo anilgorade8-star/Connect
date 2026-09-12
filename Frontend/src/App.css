@@ -100,32 +100,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(
-      circle at 30% 25%,
-      rgba(147, 117, 255, 0.22),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at 70% 80%,
-      rgba(128, 92, 255, 0.18),
-      transparent 28%
-    ),
-    linear-gradient(135deg, #050505 0%, #0b0b12 35%, #120d1d 100%);
+  background: 
+    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.08) 0%, transparent 65%),
+    #0e1217;
   padding: 20px;
   overflow: hidden;
-}
-.login-page::before {
-  content: "";
-  position: absolute;
-  inset: 12% 10% 8% 10%;
-  background: radial-gradient(
-    circle,
-    rgba(150, 120, 255, 0.18),
-    transparent 55%
-  );
-  filter: blur(40px);
-  pointer-events: none;
 }
 .login-container {
   position: relative;
@@ -138,15 +117,13 @@
 }
 .login-card {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 22, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #161b22;
   padding: 40px 32px;
-  border-radius: 16px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow:
-    0 18px 50px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.02);
+  border-radius: 18px;
+  box-shadow: 
+    0 20px 45px rgba(0, 0, 0, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
 .login-header {
   margin-bottom: 32px;
@@ -317,7 +294,7 @@
   display: flex;
   gap: 10px;
   margin-bottom: 25px;
-  background: #f3f4f6;
+  background: #1c1c1c;
   padding: 5px;
   border-radius: 10px;
 }
@@ -331,25 +308,26 @@
   cursor: pointer;
   font-size: 15px;
   font-weight: 600;
-  color: #666;
+  color: #888;
+  transition: all 0.2s ease;
 }
 
 .auth-tabs .active-tab {
-  background: white;
-  color: #4f46e5;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  background: #ff9839;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(255, 152, 57, 0.3);
 }
 
 .auth-switch {
   text-align: center;
   margin-top: 20px;
-  color: #666;
+  color: #888;
 }
 
 .auth-switch button {
   border: none;
   background: none;
-  color: #4f46e5;
+  color: #ff9839;
   font-weight: 600;
   cursor: pointer;
 }

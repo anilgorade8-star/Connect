@@ -8,7 +8,7 @@ function Landing() {
 
         {/* App Name */}
         <div className="navHeader">
-          <h1>Your Video Call</h1>
+          <h1>Connect</h1>
         </div>
 
         {/* NAV */}

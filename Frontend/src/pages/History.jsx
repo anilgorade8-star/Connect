@@ -21,7 +21,7 @@ export default function History() {
         }
         fetchHistory()
     }, [])
-    
+
     return (
         <><div>
             {meeting.map((e, index) => {

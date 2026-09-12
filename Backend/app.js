@@ -10,13 +10,17 @@ let connections = {};
 let message = {};
 let timeOnline = {};
 
+const isAllowedOrigin = (origin, callback) => {
+  if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    return callback(null, true);
+  }
+  return callback(null, true);
+};
+
 export const connectToSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-      ],
+      origin: isAllowedOrigin,
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -30,34 +34,50 @@ export const connectToSocket = (server) => {
     // ==========================================
 
     socket.on("join-call", (path) => {
+      let roomId = String(path || "default-room").trim();
+      try {
+        if (roomId.startsWith("http://") || roomId.startsWith("https://")) {
+          const u = new URL(roomId);
+          roomId = u.pathname;
+        }
+      } catch {}
+      roomId = roomId.replace(/^\/auth\//, "/").replace(/^\//, "").replace(/\/$/, "") || "default-room";
+
       console.log(
         "JOIN CALL:",
         socket.id,
-        path
+        "Room:",
+        roomId
       );
 
-      if (!connections[path]) {
-        connections[path] = [];
+      if (!connections[roomId]) {
+        connections[roomId] = [];
       }
 
-      if (!connections[path].includes(socket.id)) {
-        connections[path].push(socket.id);
+      if (!connections[roomId].includes(socket.id)) {
+        connections[roomId].push(socket.id);
       }
 
       timeOnline[socket.id] = new Date();
 
-      const clients = connections[path];
+      const clients = connections[roomId];
 
       console.log(
         "CLIENTS IN ROOM:",
+        roomId,
         clients
       );
 
       // Tell every user about the users
-      // currently inside the room
+      // currently inside the room (emit both user-join and user-joined)
       clients.forEach((clientId) => {
         io.to(clientId).emit(
           "user-join",
+          socket.id,
+          clients
+        );
+        io.to(clientId).emit(
+          "user-joined",
           socket.id,
           clients
         );
@@ -195,14 +215,10 @@ export const connectToSocket = (server) => {
 const app = express();
 const server = createServer(app);
 const port = process.env.PORT || 8080;
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: isAllowedOrigin,
     credentials: true,
   })
 );

@@ -4,7 +4,7 @@ const withAuth = (Component) => {
   function AuthenticatedComponent(props) {
     const token = localStorage.getItem("token");
 
-    if (!token) {
+    if (!token || token === "undefined" || token === "null" || token.trim() === "") {
       return <Navigate to="/auth" replace />;
     }
 
