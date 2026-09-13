@@ -68,14 +68,8 @@ export const connectToSocket = (server) => {
         clients
       );
 
-      // Tell every user about the users
-      // currently inside the room (emit both user-join and user-joined)
+      // Notify all clients in room about the updated participant list
       clients.forEach((clientId) => {
-        io.to(clientId).emit(
-          "user-join",
-          socket.id,
-          clients
-        );
         io.to(clientId).emit(
           "user-joined",
           socket.id,
