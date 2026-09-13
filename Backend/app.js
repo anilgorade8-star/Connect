@@ -6,14 +6,8 @@ import mongoose from "mongoose";
 import { Server } from "socket.io";
 import usersRouter from "./routes/usersroutes.js";
 
-let connections = {};
-let message = {};
-let timeOnline = {};
-
 const isAllowedOrigin = (origin, callback) => {
-  if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-    return callback(null, true);
-  }
+  // Allow all origins with dynamic reflection for credentials support
   return callback(null, true);
 };
 
@@ -26,14 +20,16 @@ export const connectToSocket = (server) => {
     },
   });
 
+  const socketToRoom = {};
+  const roomMessages = {};
+
   io.on("connection", (socket) => {
     console.log("Socket connected:", socket.id);
 
     // ==========================================
-    // JOIN CALL
+    // 1. JOIN ROOM (Native Socket.io Room Logic)
     // ==========================================
-
-    socket.on("join-call", (path) => {
+    socket.on("join-call", (path, username) => {
       let roomId = String(path || "default-room").trim();
       try {
         if (roomId.startsWith("http://") || roomId.startsWith("https://")) {
@@ -43,153 +39,106 @@ export const connectToSocket = (server) => {
       } catch {}
       roomId = roomId.replace(/^\/auth\//, "/").replace(/^\//, "").replace(/\/$/, "") || "default-room";
 
-      console.log("Joining room:", roomId);
+      console.log("Joining room:", roomId, "User:", username || "Guest", "Socket:", socket.id);
 
-      if (!connections[roomId]) {
-        connections[roomId] = [];
-      }
+      socket.join(roomId);
+      socketToRoom[socket.id] = roomId;
 
-      if (!connections[roomId].includes(socket.id)) {
-        connections[roomId].push(socket.id);
-      }
+      // Get all existing active sockets in this room (excluding self)
+      const clientsInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+      const existingUsers = clientsInRoom.filter((id) => id !== socket.id);
 
-      timeOnline[socket.id] = new Date();
-
-      const roomUsers = connections[roomId];
       console.log("User joined:", socket.id);
-      console.log("Users in room:", roomUsers);
+      console.log("Users in room:", clientsInRoom);
 
-      // Notify all clients in room about the updated participant list
-      roomUsers.forEach((clientId) => {
-        io.to(clientId).emit(
-          "user-joined",
-          socket.id,
-          roomUsers
-        );
+      // Send list of existing participants only to newly joined user
+      socket.emit("all-users", existingUsers);
+
+      // Notify existing users in the room about the new participant
+      socket.to(roomId).emit("user-joined", {
+        socketId: socket.id,
+        username: username || "Guest",
       });
     });
 
     // ==========================================
-    // WEBRTC SIGNAL
+    // 2. TARGETED WEBRTC OFFER
     // ==========================================
+    socket.on("offer", ({ target, offer }) => {
+      if (!target) return;
+      console.log("SENDING OFFER TO:", target, "FROM:", socket.id);
+      io.to(target).emit("offer", {
+        sender: socket.id,
+        offer,
+      });
+    });
 
-    socket.on(
-      "signal",
-      (toID, signalMessage) => {
-        console.log(
-          "SIGNAL:",
-          socket.id,
-          "->",
-          toID
-        );
+    // ==========================================
+    // 3. TARGETED WEBRTC ANSWER
+    // ==========================================
+    socket.on("answer", ({ target, answer }) => {
+      if (!target) return;
+      console.log("SENDING ANSWER TO:", target, "FROM:", socket.id);
+      io.to(target).emit("answer", {
+        sender: socket.id,
+        answer,
+      });
+    });
 
-        if (!toID) {
-          console.log(
-            "SIGNAL ERROR: No target ID"
-          );
-          return;
-        }
+    // ==========================================
+    // 4. TARGETED ICE CANDIDATE
+    // ==========================================
+    socket.on("ice-candidate", ({ target, candidate }) => {
+      if (!target || !candidate) return;
+      console.log("SENDING ICE TO:", target, "FROM:", socket.id);
+      io.to(target).emit("ice-candidate", {
+        sender: socket.id,
+        candidate,
+      });
+    });
 
-        io.to(toID).emit(
-          "signal",
-          socket.id,
-          signalMessage
-        );
+    // Backward compatibility for legacy signal handler
+    socket.on("signal", (toID, signalMessage) => {
+      if (!toID) return;
+      io.to(toID).emit("signal", socket.id, signalMessage);
+    });
+
+    // ==========================================
+    // 5. CHAT MESSAGE
+    // ==========================================
+    socket.on("chat-message", (data, sender) => {
+      const roomId = socketToRoom[socket.id];
+      if (!roomId) return;
+
+      if (!roomMessages[roomId]) {
+        roomMessages[roomId] = [];
       }
-    );
+
+      roomMessages[roomId].push({
+        sender,
+        data,
+        "socket-id-sender": socket.id,
+      });
+
+      io.to(roomId).emit("chat-message", data, sender, socket.id);
+    });
 
     // ==========================================
-    // CHAT MESSAGE
+    // 6. DISCONNECT & LEAVE
     // ==========================================
-
-    socket.on(
-      "chat-message",
-      (data, sender) => {
-        let matchingRoom = null;
-
-        for (const [
-          roomId,
-          clients,
-        ] of Object.entries(connections)) {
-          if (clients.includes(socket.id)) {
-            matchingRoom = roomId;
-            break;
-          }
-        }
-
-        if (!matchingRoom) {
-          return;
-        }
-
-        if (!message[matchingRoom]) {
-          message[matchingRoom] = [];
-        }
-
-        message[matchingRoom].push({
-          sender: sender,
-          data: data,
-          "socket-id-sender": socket.id,
-        });
-
-        connections[matchingRoom].forEach(
-          (clientId) => {
-            io.to(clientId).emit(
-              "chat-message",
-              data,
-              sender,
-              socket.id
-            );
-          }
-        );
-      }
-    );
-
-    // ==========================================
-    // DISCONNECT
-    // ==========================================
-
     socket.on("disconnect", () => {
-      console.log(
-        "SOCKET DISCONNECTED:",
-        socket.id
-      );
+      console.log("Socket disconnected:", socket.id);
+      const roomId = socketToRoom[socket.id];
 
-      delete timeOnline[socket.id];
+      if (roomId) {
+        socket.to(roomId).emit("user-left", { socketId: socket.id });
+        delete socketToRoom[socket.id];
 
-      for (const [
-        roomId,
-        clients,
-      ] of Object.entries(connections)) {
-        if (!clients.includes(socket.id)) {
-          continue;
+        const remaining = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+        if (remaining.length === 0) {
+          delete roomMessages[roomId];
         }
-
-        // Tell other users
-        clients.forEach((clientId) => {
-          if (clientId !== socket.id) {
-            io.to(clientId).emit(
-              "user-left",
-              socket.id
-            );
-          }
-        });
-
-        // Remove user
-        connections[roomId] =
-          clients.filter(
-            (id) => id !== socket.id
-          );
-
-        // Remove empty room
-        if (
-          connections[roomId].length === 0
-        ) {
-          delete connections[roomId];
-
-          if (message[roomId]) {
-            delete message[roomId];
-          }
-        }
+        console.log(`User ${socket.id} left room ${roomId}. Remaining:`, remaining);
       }
     });
   });
@@ -201,12 +150,7 @@ const app = express();
 const server = createServer(app);
 const port = process.env.PORT || 8080;
 
-app.use(
-  cors({
-    origin: isAllowedOrigin,
-    credentials: true,
-  })
-);
+app.use(cors({ origin: isAllowedOrigin, credentials: true }));
 app.use(express.json());
 
 // Health check and root ping for Render

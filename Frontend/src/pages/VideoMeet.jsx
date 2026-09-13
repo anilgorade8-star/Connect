@@ -82,17 +82,17 @@ function ChatArea({ onSendMessage }) {
     );
 }
 
-// Dedicated Remote Video Participant Tile to guarantee reliable audio and video playback
-function RemoteVideoTile({ remote }) {
+// Dedicated Remote Video Participant Tile (Requirement 5)
+function RemoteVideoTile({ remoteSocketId, stream }) {
     const videoRef = useRef(null);
     const [needsUnmute, setNeedsUnmute] = useState(false);
 
     useEffect(() => {
         const el = videoRef.current;
-        if (!el || !remote.stream) return;
+        if (!el || !stream) return;
 
-        if (el.srcObject !== remote.stream) {
-            el.srcObject = remote.stream;
+        if (el.srcObject !== stream) {
+            el.srcObject = stream;
         }
 
         const tryPlay = () => {
@@ -103,24 +103,24 @@ function RemoteVideoTile({ remote }) {
                     el.muted = true;
                     el.play().then(() => {
                         setNeedsUnmute(true);
-                    }).catch(e2 => console.error("Muted playback error:", e2));
+                    }).catch((e2) => console.error("Muted playback error:", e2));
                 });
         };
 
         tryPlay();
-    }, [remote.stream]);
+    }, [stream]);
 
     const handleManualPlay = () => {
         if (videoRef.current) {
             videoRef.current.muted = false;
             videoRef.current.play()
                 .then(() => setNeedsUnmute(false))
-                .catch(e => console.error("Manual play error:", e));
+                .catch((e) => console.error("Manual unmute error:", e));
         }
     };
 
     return (
-        <div className={styles.videoTile}>
+        <div className={styles.videoTile} data-socket-id={remoteSocketId}>
             <video
                 ref={videoRef}
                 autoPlay
@@ -148,10 +148,9 @@ export default function VideoMeetComponent() {
     const localVideoref = useRef(null);
     const messagesEndRef = useRef(null);
 
-    // Component-scoped WebRTC connection and media state references
-    const connectionsRef = useRef({});
+    // Multi-peer connection map: remoteSocketId -> RTCPeerConnection (Requirement 1 & 3)
+    const peerConnectionsRef = useRef(new Map());
     const iceCandidatesQueueRef = useRef({});
-    const remoteStreamsRef = useRef({});
     const screenOriginalVideoTrackRef = useRef(null);
 
     const [videoAvailable, setVideoAvailable] = useState(true);
@@ -167,7 +166,8 @@ export default function VideoMeetComponent() {
     const [askForUsername, setAskForUsername] = useState(true);
     const [username, setUsername] = useState("");
     const [usernameError, setUsernameError] = useState("");
-    const [videos, setVideos] = useState([]);
+    // Remote streams stored by remote user socket ID (Requirement 4)
+    const [remoteStreams, setRemoteStreams] = useState({});
     const [micLevel, setMicLevel] = useState(0);
 
     // Live microphone audio visualizer for lobby
@@ -237,30 +237,37 @@ export default function VideoMeetComponent() {
         }
     }, []);
 
-    // Get permissions on initial load
+    // Get permissions on initial load and setup unmount cleanup (Requirement 7 & 12)
     useEffect(() => {
         getPermissions();
 
         return () => {
-            // Cleanup on component unmount
             try {
                 if (window.localStream) {
-                    window.localStream.getTracks().forEach(t => t.stop());
+                    window.localStream.getTracks().forEach((t) => t.stop());
                     window.localStream = null;
                 }
             } catch {}
 
             try {
-                Object.values(connectionsRef.current).forEach(pc => {
+                peerConnectionsRef.current.forEach((pc) => {
                     try { pc.close(); } catch {}
                 });
-                connectionsRef.current = {};
+                peerConnectionsRef.current.clear();
                 iceCandidatesQueueRef.current = {};
-                remoteStreamsRef.current = {};
+                setRemoteStreams({});
             } catch {}
 
             try {
                 if (socketRef.current) {
+                    socketRef.current.off('connect');
+                    socketRef.current.off('all-users');
+                    socketRef.current.off('user-joined');
+                    socketRef.current.off('offer');
+                    socketRef.current.off('answer');
+                    socketRef.current.off('ice-candidate');
+                    socketRef.current.off('user-left');
+                    socketRef.current.off('chat-message');
                     socketRef.current.disconnect();
                 }
             } catch {}
@@ -384,60 +391,47 @@ export default function VideoMeetComponent() {
         return new MediaStream(tracks);
     };
 
-    // WebRTC Peer Connection Factory
-    const createPeerConnection = (targetSocketId) => {
-        if (connectionsRef.current[targetSocketId]) {
-            return connectionsRef.current[targetSocketId];
+    // =========================================================================
+    // WebRTC Peer Connection Factory (Requirement 1, 2, 3, 6, 8, 9, 14)
+    // =========================================================================
+    const createPeerConnection = (remoteSocketId) => {
+        // STRICT SAFETY CHECK: Local stream must NEVER be added to peer connections to self (Requirement 2)
+        if (!remoteSocketId || remoteSocketId === socketIdRef.current) {
+            return null;
         }
 
-        console.log("Creating peer connection for:", targetSocketId);
+        if (peerConnectionsRef.current.has(remoteSocketId)) {
+            return peerConnectionsRef.current.get(remoteSocketId);
+        }
+
+        console.log("CREATING PEER CONNECTION FOR:", remoteSocketId);
 
         const pc = new RTCPeerConnection(peerConfigConnections);
-        connectionsRef.current[targetSocketId] = pc;
+        peerConnectionsRef.current.set(remoteSocketId, pc);
 
-        // Send local ICE candidates to the target peer
+        // Send local ICE candidates to the target peer (Requirement 4 & 14)
         pc.onicecandidate = (event) => {
             if (event.candidate && socketRef.current) {
-                console.log("Sending ICE candidate to:", targetSocketId);
-                socketRef.current.emit(
-                    'signal',
-                    targetSocketId,
-                    JSON.stringify({ ice: event.candidate })
-                );
-            }
-        };
-
-        // Standard WebRTC ontrack handler
-        pc.ontrack = (event) => {
-            console.log("Remote track received:", event.streams[0] || event.track);
-            if (!remoteStreamsRef.current[targetSocketId]) {
-                remoteStreamsRef.current[targetSocketId] = new MediaStream();
-            }
-
-            const currentStream = remoteStreamsRef.current[targetSocketId];
-
-            if (event.streams && event.streams[0]) {
-                event.streams[0].getTracks().forEach((track) => {
-                    if (!currentStream.getTracks().some((t) => t.id === track.id)) {
-                        currentStream.addTrack(track);
-                    }
+                console.log("SENDING ICE TO:", remoteSocketId);
+                socketRef.current.emit("ice-candidate", {
+                    target: remoteSocketId,
+                    candidate: event.candidate,
                 });
-            } else if (event.track) {
-                if (!currentStream.getTracks().some((t) => t.id === event.track.id)) {
-                    currentStream.addTrack(event.track);
-                }
             }
-
-            // Fresh MediaStream instance guarantees React re-render and video decoder re-attachment
-            const newStream = new MediaStream(currentStream.getTracks());
-
-            setVideos((prevVideos) => {
-                const filtered = prevVideos.filter((v) => v.socketId !== targetSocketId);
-                return [...filtered, { socketId: targetSocketId, stream: newStream }];
-            });
         };
 
-        // Attach local tracks
+        // Handle remote incoming track (Requirement 4, 5, 8, 14)
+        pc.ontrack = (event) => {
+            console.log("REMOTE TRACK FROM:", remoteSocketId);
+            const remoteStream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+
+            setRemoteStreams((prev) => ({
+                ...prev,
+                [remoteSocketId]: remoteStream,
+            }));
+        };
+
+        // Attach local tracks to this remote peer connection (Requirement 9)
         const localStreamToUse = window.localStream || blackSilence();
         localStreamToUse.getTracks().forEach((track) => {
             try {
@@ -448,113 +442,38 @@ export default function VideoMeetComponent() {
         });
 
         pc.onconnectionstatechange = () => {
-            console.log("Connection state:", pc.connectionState);
+            console.log("CONNECTION STATE:", pc.connectionState);
         };
 
         pc.oniceconnectionstatechange = () => {
-            console.log("ICE connection state:", pc.iceConnectionState);
+            console.log("ICE STATE:", pc.iceConnectionState);
         };
 
         return pc;
     };
 
-    // Process incoming signaling messages (SDP offers/answers and ICE candidates)
-    const gotMessageFromServer = async (fromId, message) => {
-        try {
-            if (fromId === socketIdRef.current) return;
-            const signal = JSON.parse(message);
-
-            let pc = connectionsRef.current[fromId];
-            if (!pc) {
-                pc = createPeerConnection(fromId);
-            }
-
-            // Handle SDP offer or answer
-            if (signal.sdp) {
-                if (signal.sdp.type === 'offer') {
-                    console.log("Offer received from:", fromId);
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-
-                    // Process any ICE candidates that were queued while remoteDescription was null
-                    if (iceCandidatesQueueRef.current[fromId]?.length > 0) {
-                        for (const cand of iceCandidatesQueueRef.current[fromId]) {
-                            try {
-                                await pc.addIceCandidate(new RTCIceCandidate(cand));
-                            } catch (e) {
-                                console.warn("Queued ICE candidate application note:", e);
-                            }
-                        }
-                        iceCandidatesQueueRef.current[fromId] = [];
-                    }
-
-                    console.log("Creating answer for:", fromId);
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    if (socketRef.current) {
-                        socketRef.current.emit(
-                            'signal',
-                            fromId,
-                            JSON.stringify({ sdp: pc.localDescription })
-                        );
-                    }
-                } else if (signal.sdp.type === 'answer') {
-                    console.log("Answer received from:", fromId);
-                    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-
-                    // Process queued ICE candidates
-                    if (iceCandidatesQueueRef.current[fromId]?.length > 0) {
-                        for (const cand of iceCandidatesQueueRef.current[fromId]) {
-                            try {
-                                await pc.addIceCandidate(new RTCIceCandidate(cand));
-                            } catch (e) {
-                                console.warn("Queued ICE candidate application note:", e);
-                            }
-                        }
-                        iceCandidatesQueueRef.current[fromId] = [];
-                    }
-                }
-            }
-
-            // Handle ICE candidate
-            if (signal.ice) {
-                console.log("Received ICE candidate from:", fromId);
-                if (pc.remoteDescription && pc.remoteDescription.type) {
-                    try {
-                        await pc.addIceCandidate(new RTCIceCandidate(signal.ice));
-                    } catch (err) {
-                        console.warn("Failed to add ICE candidate directly:", err);
-                    }
-                } else {
-                    // Buffer ICE candidate until remote description is set
-                    if (!iceCandidatesQueueRef.current[fromId]) {
-                        iceCandidatesQueueRef.current[fromId] = [];
-                    }
-                    iceCandidatesQueueRef.current[fromId].push(signal.ice);
-                }
-            }
-        } catch (err) {
-            console.error("gotMessageFromServer error:", err);
-        }
-    };
-
-    // Socket server connection and event bindings
+    // =========================================================================
+    // Socket Server Connection and Targeted Signaling (Requirement 1, 6, 7, 10, 11)
+    // =========================================================================
     const connectToSocketServer = () => {
+        // Clean up previous listeners if re-connecting (Requirement 7 & 12)
         if (socketRef.current) {
-            socketRef.current.off('signal');
             socketRef.current.off('connect');
-            socketRef.current.off('chat-message');
-            socketRef.current.off('user-left');
+            socketRef.current.off('all-users');
             socketRef.current.off('user-joined');
-            socketRef.current.off('user-join');
+            socketRef.current.off('offer');
+            socketRef.current.off('answer');
+            socketRef.current.off('ice-candidate');
+            socketRef.current.off('user-left');
+            socketRef.current.off('chat-message');
             socketRef.current.disconnect();
         }
 
         socketRef.current = io.connect(server_url, { secure: server_url.startsWith("https") });
 
-        socketRef.current.on('signal', gotMessageFromServer);
-
         socketRef.current.on('connect', () => {
-            console.log("Socket connected:", socketRef.current.id);
+            console.log("MY SOCKET ID:", socketRef.current.id);
+            socketIdRef.current = socketRef.current.id;
 
             const getRoomId = () => {
                 const parts = window.location.pathname.split('/').filter(Boolean);
@@ -566,78 +485,156 @@ export default function VideoMeetComponent() {
             const roomId = getRoomId();
             console.log("Room joined:", roomId);
 
-            socketRef.current.emit('join-call', roomId);
-            socketIdRef.current = socketRef.current.id;
+            // Join the room
+            socketRef.current.emit('join-call', roomId, username || "Guest");
+        });
 
-            socketRef.current.on('chat-message', addMessage);
+        // 1. Existing Users in Room: When I join, send offer to each existing user (Requirement 6 & 10)
+        socketRef.current.on('all-users', (existingUsers) => {
+            console.log("Existing users in room:", existingUsers);
+            existingUsers.forEach((remoteSocketId) => {
+                if (remoteSocketId === socketIdRef.current) return; // NEVER SELF!
 
-            socketRef.current.on('user-left', (id) => {
-                console.log("User left:", id);
-                setVideos((videos) => {
-                    const updated = videos.filter((v) => v.socketId !== id);
-                    return updated;
-                });
-                if (connectionsRef.current[id]) {
-                    try {
-                        connectionsRef.current[id].close();
-                    } catch {}
-                    delete connectionsRef.current[id];
-                }
-                delete iceCandidatesQueueRef.current[id];
-                delete remoteStreamsRef.current[id];
-            });
+                const pc = createPeerConnection(remoteSocketId);
+                if (!pc) return;
 
-            const handleUserJoined = (newUserId, clients) => {
-                console.log("User joined:", newUserId);
-
-                // If I am the newly joined user, create offer to all existing peers in the room
-                if (newUserId === socketIdRef.current) {
-                    clients.forEach((otherId) => {
-                        if (otherId === socketIdRef.current) return;
-                        const pc = createPeerConnection(otherId);
-
-                        console.log("Creating offer for:", otherId);
-                        pc.createOffer({
-                            offerToReceiveAudio: true,
-                            offerToReceiveVideo: true
-                        })
-                            .then(async (description) => {
-                                await pc.setLocalDescription(description);
-                                if (socketRef.current) {
-                                    socketRef.current.emit(
-                                        'signal',
-                                        otherId,
-                                        JSON.stringify({ sdp: pc.localDescription })
-                                    );
-                                }
-                            })
-                            .catch((err) => console.error("Error creating offer:", err));
-                    });
-                } else {
-                    // Another user joined. Ensure a peer connection exists for them
-                    if (!connectionsRef.current[newUserId]) {
-                        createPeerConnection(newUserId);
-                    }
-                }
-            };
-
-            // Register handler for user-joined
-            socketRef.current.on('user-joined', handleUserJoined);
-            // Backward compatibility if older backend emits user-join
-            socketRef.current.on('user-join', (id, clients) => {
-                if (!connectionsRef.current[id] || id === socketIdRef.current) {
-                    handleUserJoined(id, clients);
-                }
+                console.log("SENDING OFFER TO:", remoteSocketId);
+                pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
+                    .then(async (offer) => {
+                        await pc.setLocalDescription(offer);
+                        socketRef.current.emit('offer', {
+                            target: remoteSocketId,
+                            offer: pc.localDescription,
+                        });
+                    })
+                    .catch((err) => console.error("Error creating offer:", err));
             });
         });
+
+        // 2. New User Joined Room: Prepare peer connection for incoming offer (Requirement 6 & 10)
+        socketRef.current.on('user-joined', ({ socketId: remoteSocketId, username: peerName }) => {
+            console.log("REMOTE USER ID:", remoteSocketId, "Username:", peerName);
+            if (remoteSocketId === socketIdRef.current) return; // NEVER SELF!
+
+            if (!peerConnectionsRef.current.has(remoteSocketId)) {
+                createPeerConnection(remoteSocketId);
+            }
+        });
+
+        // 3. Receive Targeted Offer (Requirement 3, 6, 7, 14)
+        socketRef.current.on('offer', async ({ sender, offer }) => {
+            console.log("RECEIVED OFFER FROM:", sender);
+            if (sender === socketIdRef.current) return; // NEVER SELF!
+
+            let pc = peerConnectionsRef.current.get(sender);
+            if (!pc) {
+                pc = createPeerConnection(sender);
+            }
+            if (!pc) return;
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+                // Process queued ICE candidates
+                if (iceCandidatesQueueRef.current[sender]?.length > 0) {
+                    for (const cand of iceCandidatesQueueRef.current[sender]) {
+                        try {
+                            await pc.addIceCandidate(new RTCIceCandidate(cand));
+                        } catch (e) {
+                            console.warn("Queued ICE candidate application note:", e);
+                        }
+                    }
+                    delete iceCandidatesQueueRef.current[sender];
+                }
+
+                console.log("SENDING ANSWER TO:", sender);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                socketRef.current.emit('answer', {
+                    target: sender,
+                    answer: pc.localDescription,
+                });
+            } catch (err) {
+                console.error("Error processing offer:", err);
+            }
+        });
+
+        // 4. Receive Targeted Answer (Requirement 3, 6, 7, 14)
+        socketRef.current.on('answer', async ({ sender, answer }) => {
+            console.log("RECEIVED ANSWER FROM:", sender);
+            if (sender === socketIdRef.current) return; // NEVER SELF!
+
+            const pc = peerConnectionsRef.current.get(sender);
+            if (!pc) return;
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+                // Process queued ICE candidates
+                if (iceCandidatesQueueRef.current[sender]?.length > 0) {
+                    for (const cand of iceCandidatesQueueRef.current[sender]) {
+                        try {
+                            await pc.addIceCandidate(new RTCIceCandidate(cand));
+                        } catch (e) {
+                            console.warn("Queued ICE candidate application note:", e);
+                        }
+                    }
+                    delete iceCandidatesQueueRef.current[sender];
+                }
+            } catch (err) {
+                console.error("Error processing answer:", err);
+            }
+        });
+
+        // 5. Receive Targeted ICE Candidate (Requirement 4 & 14)
+        socketRef.current.on('ice-candidate', async ({ sender, candidate }) => {
+            console.log("RECEIVED ICE FROM:", sender);
+            if (sender === socketIdRef.current) return; // NEVER SELF!
+
+            const pc = peerConnectionsRef.current.get(sender);
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (err) {
+                    console.warn("Failed to add ICE candidate directly:", err);
+                }
+            } else {
+                if (!iceCandidatesQueueRef.current[sender]) {
+                    iceCandidatesQueueRef.current[sender] = [];
+                }
+                iceCandidatesQueueRef.current[sender].push(candidate);
+            }
+        });
+
+        // 6. User Left: Cleanup peer connection and remote stream (Requirement 11)
+        socketRef.current.on('user-left', ({ socketId: remoteSocketId }) => {
+            console.log("USER LEFT:", remoteSocketId);
+            if (peerConnectionsRef.current.has(remoteSocketId)) {
+                const pc = peerConnectionsRef.current.get(remoteSocketId);
+                try {
+                    pc.close();
+                } catch {}
+                peerConnectionsRef.current.delete(remoteSocketId);
+            }
+            delete iceCandidatesQueueRef.current[remoteSocketId];
+
+            setRemoteStreams((prev) => {
+                const updated = { ...prev };
+                delete updated[remoteSocketId];
+                return updated;
+            });
+        });
+
+        // 7. Chat messages
+        socketRef.current.on('chat-message', addMessage);
     };
 
     const getMedia = () => {
         if (window.localStream) {
-            window.localStream.getAudioTracks().forEach(track => {
+            window.localStream.getAudioTracks().forEach((track) => {
                 track.enabled = audio;
             });
-            window.localStream.getVideoTracks().forEach(track => {
+            window.localStream.getVideoTracks().forEach((track) => {
                 track.enabled = video;
             });
         }
@@ -648,7 +645,7 @@ export default function VideoMeetComponent() {
         const nextState = !video;
         setVideo(nextState);
         if (window.localStream) {
-            window.localStream.getVideoTracks().forEach(track => {
+            window.localStream.getVideoTracks().forEach((track) => {
                 track.enabled = nextState;
             });
         }
@@ -658,7 +655,7 @@ export default function VideoMeetComponent() {
         const nextState = !audio;
         setAudio(nextState);
         if (window.localStream) {
-            window.localStream.getAudioTracks().forEach(track => {
+            window.localStream.getAudioTracks().forEach((track) => {
                 track.enabled = nextState;
             });
         }
@@ -687,11 +684,11 @@ export default function VideoMeetComponent() {
                 const oldVideoTrack = window.localStream?.getVideoTracks()[0];
                 screenOriginalVideoTrackRef.current = oldVideoTrack;
 
-                // Replace video track on all peer connections
-                Object.values(connectionsRef.current).forEach(pc => {
-                    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                // Replace video track on all active peer connections
+                peerConnectionsRef.current.forEach((pc) => {
+                    const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
                     if (sender) {
-                        sender.replaceTrack(screenVideoTrack).catch(e => console.warn(e));
+                        sender.replaceTrack(screenVideoTrack).catch((e) => console.warn(e));
                     }
                 });
 
@@ -715,10 +712,10 @@ export default function VideoMeetComponent() {
         setScreen(false);
         const originalTrack = screenOriginalVideoTrackRef.current;
         if (originalTrack) {
-            Object.values(connectionsRef.current).forEach(pc => {
-                const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            peerConnectionsRef.current.forEach((pc) => {
+                const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'video');
                 if (sender) {
-                    sender.replaceTrack(originalTrack).catch(e => console.warn(e));
+                    sender.replaceTrack(originalTrack).catch((e) => console.warn(e));
                 }
             });
         }
@@ -730,18 +727,18 @@ export default function VideoMeetComponent() {
     const handleEndCall = () => {
         try {
             if (window.localStream) {
-                window.localStream.getTracks().forEach(track => track.stop());
+                window.localStream.getTracks().forEach((track) => track.stop());
                 window.localStream = null;
             }
         } catch {}
 
         try {
-            Object.values(connectionsRef.current).forEach(pc => {
+            peerConnectionsRef.current.forEach((pc) => {
                 try { pc.close(); } catch {}
             });
-            connectionsRef.current = {};
+            peerConnectionsRef.current.clear();
             iceCandidatesQueueRef.current = {};
-            remoteStreamsRef.current = {};
+            setRemoteStreams({});
         } catch {}
 
         try {
@@ -809,7 +806,7 @@ export default function VideoMeetComponent() {
                                         onClick={() => {
                                             try {
                                                 if (window.localStream) {
-                                                    window.localStream.getTracks().forEach(t => t.stop());
+                                                    window.localStream.getTracks().forEach((t) => t.stop());
                                                 }
                                             } catch {}
                                             window.location.href = "/home";
@@ -939,7 +936,7 @@ export default function VideoMeetComponent() {
                 <div className={styles.meetVideoContainer}>
                     <div className={styles.videoStage}>
                         <div className={styles.conferenceView}>
-                            {/* Local Participant Video */}
+                            {/* Local Participant Video (ONLY LOCAL USER - Requirement 2) */}
                             <div className={`${styles.videoTile} ${styles.localTile}`}>
                                 <video
                                     ref={(el) => {
@@ -958,9 +955,13 @@ export default function VideoMeetComponent() {
                                 </div>
                             </div>
 
-                            {/* Remote Participants Videos */}
-                            {videos.map((remote) => (
-                                <RemoteVideoTile key={remote.socketId} remote={remote} />
+                            {/* Remote Participants Videos (ONLY REMOTE PARTICIPANTS BY SOCKET ID - Requirement 4, 5, 13) */}
+                            {Object.entries(remoteStreams).map(([remoteSocketId, stream]) => (
+                                <RemoteVideoTile
+                                    key={remoteSocketId}
+                                    remoteSocketId={remoteSocketId}
+                                    stream={stream}
+                                />
                             ))}
                         </div>
                     </div>
