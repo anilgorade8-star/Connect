@@ -390,12 +390,15 @@ export default function VideoMeetComponent() {
             return connectionsRef.current[targetSocketId];
         }
 
+        console.log("Creating peer connection for:", targetSocketId);
+
         const pc = new RTCPeerConnection(peerConfigConnections);
         connectionsRef.current[targetSocketId] = pc;
 
         // Send local ICE candidates to the target peer
         pc.onicecandidate = (event) => {
             if (event.candidate && socketRef.current) {
+                console.log("Sending ICE candidate to:", targetSocketId);
                 socketRef.current.emit(
                     'signal',
                     targetSocketId,
@@ -406,7 +409,7 @@ export default function VideoMeetComponent() {
 
         // Standard WebRTC ontrack handler
         pc.ontrack = (event) => {
-            console.log(`Received track [${event.track.kind}] from ${targetSocketId}`);
+            console.log("Remote track received:", event.streams[0] || event.track);
             if (!remoteStreamsRef.current[targetSocketId]) {
                 remoteStreamsRef.current[targetSocketId] = new MediaStream();
             }
@@ -445,7 +448,11 @@ export default function VideoMeetComponent() {
         });
 
         pc.onconnectionstatechange = () => {
-            console.log(`Peer ${targetSocketId} connection state:`, pc.connectionState);
+            console.log("Connection state:", pc.connectionState);
+        };
+
+        pc.oniceconnectionstatechange = () => {
+            console.log("ICE connection state:", pc.iceConnectionState);
         };
 
         return pc;
@@ -464,22 +471,23 @@ export default function VideoMeetComponent() {
 
             // Handle SDP offer or answer
             if (signal.sdp) {
-                await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-
-                // Process any ICE candidates that were queued while remoteDescription was null
-                if (iceCandidatesQueueRef.current[fromId]?.length > 0) {
-                    for (const cand of iceCandidatesQueueRef.current[fromId]) {
-                        try {
-                            await pc.addIceCandidate(new RTCIceCandidate(cand));
-                        } catch (e) {
-                            console.warn("Queued ICE candidate application note:", e);
-                        }
-                    }
-                    iceCandidatesQueueRef.current[fromId] = [];
-                }
-
-                // If offer, generate and transmit answer
                 if (signal.sdp.type === 'offer') {
+                    console.log("Offer received from:", fromId);
+                    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+                    // Process any ICE candidates that were queued while remoteDescription was null
+                    if (iceCandidatesQueueRef.current[fromId]?.length > 0) {
+                        for (const cand of iceCandidatesQueueRef.current[fromId]) {
+                            try {
+                                await pc.addIceCandidate(new RTCIceCandidate(cand));
+                            } catch (e) {
+                                console.warn("Queued ICE candidate application note:", e);
+                            }
+                        }
+                        iceCandidatesQueueRef.current[fromId] = [];
+                    }
+
+                    console.log("Creating answer for:", fromId);
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
                     if (socketRef.current) {
@@ -489,11 +497,27 @@ export default function VideoMeetComponent() {
                             JSON.stringify({ sdp: pc.localDescription })
                         );
                     }
+                } else if (signal.sdp.type === 'answer') {
+                    console.log("Answer received from:", fromId);
+                    await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+                    // Process queued ICE candidates
+                    if (iceCandidatesQueueRef.current[fromId]?.length > 0) {
+                        for (const cand of iceCandidatesQueueRef.current[fromId]) {
+                            try {
+                                await pc.addIceCandidate(new RTCIceCandidate(cand));
+                            } catch (e) {
+                                console.warn("Queued ICE candidate application note:", e);
+                            }
+                        }
+                        iceCandidatesQueueRef.current[fromId] = [];
+                    }
                 }
             }
 
             // Handle ICE candidate
             if (signal.ice) {
+                console.log("Received ICE candidate from:", fromId);
                 if (pc.remoteDescription && pc.remoteDescription.type) {
                     try {
                         await pc.addIceCandidate(new RTCIceCandidate(signal.ice));
@@ -515,11 +539,23 @@ export default function VideoMeetComponent() {
 
     // Socket server connection and event bindings
     const connectToSocketServer = () => {
+        if (socketRef.current) {
+            socketRef.current.off('signal');
+            socketRef.current.off('connect');
+            socketRef.current.off('chat-message');
+            socketRef.current.off('user-left');
+            socketRef.current.off('user-joined');
+            socketRef.current.off('user-join');
+            socketRef.current.disconnect();
+        }
+
         socketRef.current = io.connect(server_url, { secure: server_url.startsWith("https") });
 
         socketRef.current.on('signal', gotMessageFromServer);
 
         socketRef.current.on('connect', () => {
+            console.log("Socket connected:", socketRef.current.id);
+
             const getRoomId = () => {
                 const parts = window.location.pathname.split('/').filter(Boolean);
                 if (parts.length > 1 && parts[0] === 'auth') {
@@ -528,12 +564,15 @@ export default function VideoMeetComponent() {
                 return parts[0] || 'default-room';
             };
             const roomId = getRoomId();
+            console.log("Room joined:", roomId);
+
             socketRef.current.emit('join-call', roomId);
             socketIdRef.current = socketRef.current.id;
 
             socketRef.current.on('chat-message', addMessage);
 
             socketRef.current.on('user-left', (id) => {
+                console.log("User left:", id);
                 setVideos((videos) => {
                     const updated = videos.filter((v) => v.socketId !== id);
                     return updated;
@@ -549,7 +588,7 @@ export default function VideoMeetComponent() {
             });
 
             const handleUserJoined = (newUserId, clients) => {
-                console.log("Participant joined room:", newUserId, "All clients:", clients);
+                console.log("User joined:", newUserId);
 
                 // If I am the newly joined user, create offer to all existing peers in the room
                 if (newUserId === socketIdRef.current) {
@@ -557,6 +596,7 @@ export default function VideoMeetComponent() {
                         if (otherId === socketIdRef.current) return;
                         const pc = createPeerConnection(otherId);
 
+                        console.log("Creating offer for:", otherId);
                         pc.createOffer({
                             offerToReceiveAudio: true,
                             offerToReceiveVideo: true

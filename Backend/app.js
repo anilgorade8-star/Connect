@@ -27,7 +27,7 @@ export const connectToSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    console.log("SOCKET CONNECTED:", socket.id);
+    console.log("Socket connected:", socket.id);
 
     // ==========================================
     // JOIN CALL
@@ -43,12 +43,7 @@ export const connectToSocket = (server) => {
       } catch {}
       roomId = roomId.replace(/^\/auth\//, "/").replace(/^\//, "").replace(/\/$/, "") || "default-room";
 
-      console.log(
-        "JOIN CALL:",
-        socket.id,
-        "Room:",
-        roomId
-      );
+      console.log("Joining room:", roomId);
 
       if (!connections[roomId]) {
         connections[roomId] = [];
@@ -60,20 +55,16 @@ export const connectToSocket = (server) => {
 
       timeOnline[socket.id] = new Date();
 
-      const clients = connections[roomId];
-
-      console.log(
-        "CLIENTS IN ROOM:",
-        roomId,
-        clients
-      );
+      const roomUsers = connections[roomId];
+      console.log("User joined:", socket.id);
+      console.log("Users in room:", roomUsers);
 
       // Notify all clients in room about the updated participant list
-      clients.forEach((clientId) => {
+      roomUsers.forEach((clientId) => {
         io.to(clientId).emit(
           "user-joined",
           socket.id,
-          clients
+          roomUsers
         );
       });
     });
