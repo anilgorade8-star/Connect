@@ -51,7 +51,6 @@ const maximizeVideoQuality = (peerConnection) => {
     } catch {}
 };
 
-// Inject bandwidth into SDP to instruct peers to send maximum quality
 const enhanceSDP = (sdp) => {
     if (!sdp) return sdp;
     let modified = sdp;
@@ -90,6 +89,34 @@ const CloseIcon = (props) => (
     <SvgIcon {...props}><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></SvgIcon>
 );
 
+// Isolated Chat Input component so keystrokes do not re-render video streams
+function ChatArea({ onSendMessage }) {
+    const [text, setText] = useState("");
+
+    const handleSend = () => {
+        if (!text.trim()) return;
+        onSendMessage(text);
+        setText("");
+    };
+
+    return (
+        <div className={styles.chattingArea}>
+            <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSend();
+                    }
+                }}
+                placeholder="Send a message to everyone..."
+            />
+            <button type="button" onClick={handleSend}>Send</button>
+        </div>
+    );
+}
+
 export default function VideoMeetComponent() {
     const socketRef = useRef();
     const socketIdRef = useRef();
@@ -109,6 +136,7 @@ export default function VideoMeetComponent() {
     const [newMessages, setNewMessages] = useState(0);
     const [askForUsername, setAskForUsername] = useState(true);
     const [username, setUsername] = useState("");
+    const [usernameError, setUsernameError] = useState("");
     const [videos, setVideos] = useState([]);
 
     // Check authentication: If no valid token, redirect to /auth immediately
@@ -119,7 +147,7 @@ export default function VideoMeetComponent() {
         }
     }, []);
 
-    // Check media permissions once on mount
+   
     useEffect(() => {
         getPermissions();
     }, []);
@@ -127,7 +155,9 @@ export default function VideoMeetComponent() {
     // Re-attach local stream whenever switching between lobby and meeting
     useEffect(() => {
         if (localVideoref.current && window.localStream) {
-            localVideoref.current.srcObject = window.localStream;
+            if (localVideoref.current.srcObject !== window.localStream) {
+                localVideoref.current.srcObject = window.localStream;
+            }
         }
     }, [askForUsername]);
 
@@ -610,13 +640,20 @@ export default function VideoMeetComponent() {
         }
     };
 
-    const sendMessage = () => {
-        if (!message.trim() || !socketRef.current) return;
-        socketRef.current.emit('chat-message', message, username || "Guest");
+    const sendMessage = (textToSend) => {
+        const text = (typeof textToSend === 'string' ? textToSend : message).trim();
+        if (!text || !socketRef.current) return;
+        socketRef.current.emit('chat-message', text, username || "Guest");
         setMessage("");
     };
 
     const connect = () => {
+        const trimmed = username.trim();
+        if (!trimmed) {
+            setUsernameError("Please enter your name to join the call");
+            return;
+        }
+        setUsernameError("");
         setAskForUsername(false);
         getMedia();
     };
@@ -658,7 +695,7 @@ export default function VideoMeetComponent() {
                             <video
                                 ref={(el) => {
                                     localVideoref.current = el;
-                                    if (el && window.localStream) {
+                                    if (el && window.localStream && el.srcObject !== window.localStream) {
                                         el.srcObject = window.localStream;
                                     }
                                 }}
@@ -694,23 +731,34 @@ export default function VideoMeetComponent() {
                                 id="outlined-basic"
                                 label="Your Name"
                                 value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                onChange={(e) => {
+                                    setUsername(e.target.value);
+                                    if (usernameError) setUsernameError("");
+                                }}
                                 onKeyDown={(e) => { if (e.key === 'Enter') connect(); }}
                                 variant="outlined"
                                 fullWidth
                                 autoFocus
+                                error={Boolean(usernameError)}
+                                helperText={usernameError}
                                 sx={{
                                     input: { color: '#ffffff' },
-                                    label: { color: '#8b949e' },
+                                    label: { color: usernameError ? '#f85149 !important' : '#8b949e' },
+                                    '& .MuiFormHelperText-root': {
+                                        color: '#f85149 !important',
+                                        fontSize: '13px',
+                                        marginTop: '6px',
+                                        marginLeft: '4px'
+                                    },
                                     '& .MuiOutlinedInput-root': {
-                                        '& fieldset': { borderColor: '#30363d' },
-                                        '&:hover fieldset': { borderColor: '#484f58' },
-                                        '&.Mui-focused fieldset': { borderColor: '#ff9839' },
+                                        '& fieldset': { borderColor: usernameError ? '#f85149 !important' : '#30363d' },
+                                        '&:hover fieldset': { borderColor: usernameError ? '#f85149 !important' : '#484f58' },
+                                        '&.Mui-focused fieldset': { borderColor: usernameError ? '#f85149 !important' : '#ff9839' },
                                         backgroundColor: '#0d1117',
                                         borderRadius: '9px'
                                     },
                                     '& .MuiInputLabel-root.Mui-focused': {
-                                        color: '#ff9839'
+                                        color: usernameError ? '#f85149 !important' : '#ff9839'
                                     }
                                 }}
                             />
@@ -745,7 +793,7 @@ export default function VideoMeetComponent() {
                                 <video
                                     ref={(el) => {
                                         localVideoref.current = el;
-                                        if (el && window.localStream) {
+                                        if (el && window.localStream && el.srcObject !== window.localStream) {
                                             el.srcObject = window.localStream;
                                         }
                                     }}
@@ -765,7 +813,7 @@ export default function VideoMeetComponent() {
                                     <video
                                         data-socket={remote.socketId}
                                         ref={(ref) => {
-                                            if (ref && remote.stream) {
+                                            if (ref && remote.stream && ref.srcObject !== remote.stream) {
                                                 ref.srcObject = remote.stream;
                                             }
                                         }}
@@ -807,20 +855,7 @@ export default function VideoMeetComponent() {
                                     <div ref={messagesEndRef} />
                                 </div>
 
-                                <div className={styles.chattingArea}>
-                                    <input
-                                        value={message}
-                                        onChange={(e) => setMessage(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                sendMessage();
-                                            }
-                                        }}
-                                        placeholder="Send a message to everyone..."
-                                    />
-                                    <button onClick={sendMessage}>Send</button>
-                                </div>
+                                <ChatArea onSendMessage={sendMessage} />
                             </div>
                         </div>
                     )}

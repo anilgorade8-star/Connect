@@ -1,5 +1,6 @@
 import httpStatus from "http-status";
 import { User } from "../models/usersModel.js";
+import { Meeting } from "../models/meeting.model.js";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 
@@ -149,7 +150,98 @@ const register = async (req, res) => {
   }
 };
 
+// ==========================================
+// GET USER HISTORY
+// ==========================================
+
+const getUserHistory = async (req, res) => {
+  const token = req.query.token || req.body?.token || req.headers.authorization?.replace(/^Bearer\s+/, "");
+
+  if (!token) {
+    return res.status(httpStatus.UNAUTHORIZED).json({
+      message: "Token is required",
+    });
+  }
+
+  try {
+    const user = await User.findOne({ token: token });
+
+    if (!user) {
+      return res.status(httpStatus.UNAUTHORIZED).json({
+        message: "Invalid or expired token",
+      });
+    }
+
+    const meetings = await Meeting.find({
+      $or: [
+        { user_id: user.username },
+        { user_id: user._id.toString() },
+      ],
+    }).sort({ date: -1 });
+
+    return res.status(httpStatus.OK).json(meetings);
+  } catch (err) {
+    console.error("getUserHistory error:", err);
+
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "Something went wrong",
+    });
+  }
+};
+
+// ==========================================
+// ADD TO ACTIVITY / HISTORY
+// ==========================================
+
+const addToHistory = async (req, res) => {
+  const token = req.body?.token || req.query?.token || req.headers.authorization?.replace(/^Bearer\s+/, "");
+  const meetingCode = req.body?.meeting_code || req.body?.meetingCode || req.query?.meeting_code;
+
+  if (!meetingCode) {
+    return res.status(httpStatus.BAD_REQUEST).json({
+      message: "Meeting code is required",
+    });
+  }
+
+  if (!token) {
+    return res.status(httpStatus.UNAUTHORIZED).json({
+      message: "Token is required",
+    });
+  }
+
+  try {
+    const user = await User.findOne({ token: token });
+
+    if (!user) {
+      return res.status(httpStatus.UNAUTHORIZED).json({
+        message: "Invalid or expired token",
+      });
+    }
+
+    const newMeeting = new Meeting({
+      user_id: user.username,
+      meetingCode: String(meetingCode).trim(),
+      date: new Date(),
+    });
+
+    await newMeeting.save();
+
+    return res.status(httpStatus.CREATED).json({
+      message: "Added code to activity successfully",
+      meeting: newMeeting,
+    });
+  } catch (err) {
+    console.error("addToHistory error:", err);
+
+    return res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
+      message: "Something went wrong",
+    });
+  }
+};
+
 export {
   login,
   register,
+  getUserHistory,
+  addToHistory,
 };

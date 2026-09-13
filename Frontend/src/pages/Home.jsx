@@ -34,7 +34,7 @@ function HomeComponent() {
         <p className="home-copy">Enter the meeting code shared with you to join the call.</p>
         <form className="join-form" onSubmit={handleJoinVideoCall}>
           <label htmlFor="meeting-code">Meeting code</label>
-          <input id="meeting-code" value={meetingCode} onChange={(event) => { setMeetingCode(event.target.value); setError(""); }} placeholder="Enter meeting code" autoFocus />
+          <input id="meeting-code" required value={meetingCode} onChange={(event) => { setMeetingCode(event.target.value); setError(""); }} placeholder="Enter meeting code" autoFocus />
           {error && <p className="join-error" role="alert">{error}</p>}
           <button type="submit">Join meeting</button>
         </form>

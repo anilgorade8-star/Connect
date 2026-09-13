@@ -1,9 +1,11 @@
 import axios from "axios";
 import httpStatus from "http-status";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import server from "../environment";
 import { AuthContext } from "./auth-context";
+
+export { AuthContext } from "./auth-context";
 
 const client = axios.create({
   baseURL: `${server}/api/v1/users`
@@ -46,30 +48,39 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const getHistoryOfUser = async () => {
+  const getHistoryOfUser = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return [];
+
     try {
       let request = await client.get("/get_all_activity", {
-        params: {
-          token: localStorage.getItem("token")
-        }
+        params: { token }
       });
-      return request.data;
+      if (Array.isArray(request.data)) {
+        return request.data;
+      }
+      return request.data?.meetings || [];
     } catch (err) {
+      console.error("Error fetching user history:", err);
       throw err;
     }
-  };
+  }, []);
 
-  const addToUserHistory = async (meetingCode) => {
+  const addToUserHistory = useCallback(async (meetingCode) => {
+    const token = localStorage.getItem("token");
+    if (!token || !meetingCode) return null;
+
     try {
       let request = await client.post("/add_to_activity", {
-        token: localStorage.getItem("token"),
+        token,
         meeting_code: meetingCode
       });
-      return request;
+      return request.data;
     } catch (e) {
+      console.warn("Could not save to history:", e);
       throw e;
     }
-  };
+  }, []);
 
   const data = {
     userData,
