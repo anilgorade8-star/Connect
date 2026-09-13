@@ -172,12 +172,32 @@
 }
 
 @media (max-width: 480px) {
+  .home-page {
+    padding: 16px 12px;
+    padding-top: 80px;
+  }
   .home-header {
-    top: 16px;
-    left: 16px;
-    right: 16px;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+  }
+  .home-brand {
+    font-size: 17px;
+  }
+  .history-button,
+  .logout-button {
+    padding: 6px 11px;
+    font-size: 12px;
   }
   .join-card {
-    padding: 28px 20px;
+    padding: 24px 18px;
+    border-radius: 14px;
+  }
+  .join-card h1 {
+    font-size: 24px;
+  }
+  .home-copy {
+    font-size: 13px;
+    margin-bottom: 18px;
   }
 }

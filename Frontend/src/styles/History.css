@@ -65,3 +65,15 @@
   text-align: center;
   padding: 48px 16px;
 }
+
+@media (max-width: 480px) {
+  .history-header {
+    padding: 12px 14px;
+  }
+  .history-brand {
+    font-size: 17px;
+  }
+  .history-container {
+    padding: 16px 12px;
+  }
+}

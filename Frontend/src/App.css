@@ -276,19 +276,113 @@
 .signup-link span:hover {
   color: #fff;
 }
+@media (max-width: 768px) {
+  .landingcontainer {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+  .landingcontainer nav {
+    padding-inline: 1.25rem;
+    padding-block: 1rem;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .landingcontainer nav h1 {
+    font-size: 24px;
+  }
+  .landingcontainer nav .navList {
+    gap: 0.5rem;
+  }
+  .landingcontainer nav .navList p,
+  .landingcontainer nav .navList div {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+  .landingPageContainer {
+    flex-direction: column-reverse;
+    height: auto;
+    padding-inline: 1.5rem;
+    padding-block: 2rem;
+    text-align: center;
+    gap: 2rem;
+  }
+  .landingPageContainer div h1 {
+    font-size: clamp(1.75rem, 6vw, 2.2rem);
+  }
+  .landingPageContainer div img {
+    height: auto;
+    max-height: 45vh;
+    max-width: 80%;
+    width: auto;
+    margin: 0 auto;
+    display: block;
+  }
+  .landingPageContainer #link {
+    margin: 20px auto 0;
+  }
+}
+
 @media (max-width: 480px) {
+  .landingcontainer nav {
+    padding-inline: 1rem;
+    padding-block: 0.75rem;
+  }
+  .landingcontainer nav h1 {
+    font-size: 20px;
+  }
+  .landingcontainer nav .navList {
+    gap: 4px;
+  }
+  .landingcontainer nav .navList p,
+  .landingcontainer nav .navList div {
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+  .landingPageContainer {
+    padding-inline: 1rem;
+    padding-block: 1.5rem;
+  }
+  .landingPageContainer div img {
+    max-height: 38vh;
+    max-width: 85%;
+  }
+  .landingPageContainer #link {
+    width: 100%;
+    max-width: 280px;
+    padding: 12px 20px;
+    text-align: center;
+  }
+  .login-page {
+    padding: 14px 10px;
+  }
   .login-card {
-    padding: 32px 24px;
+    padding: 24px 18px;
+    border-radius: 14px;
+  }
+  .login-header {
+    margin-bottom: 22px;
   }
   .login-header h1 {
-    font-size: 28px;
+    font-size: 26px;
+  }
+  .login-header p {
+    font-size: 13px;
   }
   .input-group input {
     padding: 10px 12px;
     font-size: 13px;
   }
   .signin-btn {
-    padding: 10px 14px;
+    padding: 11px 14px;
+    font-size: 14px;
+  }
+  .social-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .auth-tabs button {
+    padding: 10px;
     font-size: 14px;
   }
 }
