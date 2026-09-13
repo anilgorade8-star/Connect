@@ -1,9 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "../App.css";
 import { AuthContext } from "../contexts/auth-context";
 import Snackbar from "@mui/material/Snackbar";
+import { useNavigate } from "react-router-dom";
 
 function Authentication() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token && token !== "undefined" && token !== "null" && token.trim() !== "") {
+      navigate("/home", { replace: true });
+    }
+  }, [navigate]);
+
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");

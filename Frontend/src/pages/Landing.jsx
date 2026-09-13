@@ -1,9 +1,16 @@
-import React from "react";
+import React, { useEffect } from "react";
 import "../App.css";
 import { Link, useNavigate } from "react-router-dom";
 
 function Landing() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token && token !== "undefined" && token !== "null" && token.trim() !== "") {
+      navigate("/home", { replace: true });
+    }
+  }, [navigate]);
 
   return (
     <div className="landingcontainer">

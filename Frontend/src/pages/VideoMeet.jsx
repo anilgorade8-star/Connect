@@ -691,7 +691,7 @@ export default function VideoMeetComponent() {
             }
         } catch { }
 
-        window.location.href = "/";
+        window.location.href = "/home";
     };
 
     const addMessage = (data, sender, socketIdSender) => {
@@ -740,16 +740,32 @@ export default function VideoMeetComponent() {
                                     <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#ff9839", display: "inline-block" }}></span>
                                     Logged In
                                 </span>
-                                <button 
-                                    type="button"
-                                    className={styles.lobbyLogoutBtn}
-                                    onClick={() => {
-                                        localStorage.removeItem("token");
-                                        window.location.replace("/auth");
-                                    }}
-                                >
-                                    Log out
-                                </button>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                    <button 
+                                        type="button"
+                                        className={styles.lobbyLogoutBtn}
+                                        onClick={() => {
+                                            try {
+                                                if (window.localStream) {
+                                                    window.localStream.getTracks().forEach(t => t.stop());
+                                                }
+                                            } catch {}
+                                            window.location.href = "/home";
+                                        }}
+                                    >
+                                        Home
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        className={styles.lobbyLogoutBtn}
+                                        onClick={() => {
+                                            localStorage.removeItem("token");
+                                            window.location.replace("/auth");
+                                        }}
+                                    >
+                                        Log out
+                                    </button>
+                                </div>
                             </div>
                             <h2 className={styles.lobbyTitle}>Meeting Lobby</h2>
                             <p className={styles.lobbySubtitle}>Check your camera and audio before joining</p>
