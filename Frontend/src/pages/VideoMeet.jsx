@@ -2,36 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import io from "socket.io-client";
 import { Badge, IconButton, TextField, Button, SvgIcon } from '@mui/material';
 import styles from "../styles/videoComponent.module.css";
-import server from '../environment';
+import server, { getIceServers } from '../environment';
 
 const server_url = server;
 
 // High-reliability STUN & TURN servers for seamless cross-network / mobile NAT traversal
 const peerConfigConnections = {
-    iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "stun:stun3.l.google.com:19302" },
-        { urls: "stun:stun4.l.google.com:19302" },
-        { urls: "stun:global.stun.twilio.com:3478" },
-        { urls: "stun:relay.metered.ca:80" },
-        {
-            urls: "turn:relay.metered.ca:80",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        },
-        {
-            urls: "turn:relay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        },
-        {
-            urls: "turn:relay.metered.ca:443?transport=tcp",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-        }
-    ]
+    iceServers: getIceServers()
 };
 
 // Flexible HD Video & Audio Media Constraints

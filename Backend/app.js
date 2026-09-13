@@ -217,6 +217,15 @@ app.use(
   })
 );
 app.use(express.json());
+
+// Health check and root ping for Render
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+app.get("/", (req, res) => {
+  res.status(200).send("Connect Backend Server Running");
+});
+
 app.use("/api/v1/users", usersRouter);
 
 connectToSocket(server);
