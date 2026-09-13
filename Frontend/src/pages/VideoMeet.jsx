@@ -122,28 +122,20 @@ function RemoteVideoTile({ remote }) {
             el.play()
                 .then(() => setNeedsUnmute(false))
                 .catch((err) => {
-                    console.warn("Autoplay was prevented by browser policy:", err);
-                    setNeedsUnmute(true);
+                    console.warn("Unmuted autoplay was prevented by browser, falling back to muted video:", err);
+                    el.muted = true;
+                    el.play().then(() => {
+                        setNeedsUnmute(true);
+                    }).catch(e2 => console.error("Muted playback error:", e2));
                 });
         };
 
         tryPlay();
-
-        const handleTrackAdded = () => {
-            if (el.srcObject !== remote.stream) {
-                el.srcObject = remote.stream;
-            }
-            tryPlay();
-        };
-
-        remote.stream.addEventListener('addtrack', handleTrackAdded);
-        return () => {
-            remote.stream.removeEventListener('addtrack', handleTrackAdded);
-        };
     }, [remote.stream]);
 
     const handleManualPlay = () => {
         if (videoRef.current) {
+            videoRef.current.muted = false;
             videoRef.current.play()
                 .then(() => setNeedsUnmute(false))
                 .catch(e => console.error("Manual play error:", e));
@@ -163,7 +155,7 @@ function RemoteVideoTile({ remote }) {
                     onClick={handleManualPlay}
                     className={styles.unmutePromptBtn}
                 >
-                    🔊 Click to hear & view participant
+                    🔊 Click to hear participant
                 </button>
             )}
             <div className={styles.tileLabel}>
@@ -437,26 +429,31 @@ export default function VideoMeetComponent() {
 
         // Standard WebRTC ontrack handler
         pc.ontrack = (event) => {
-            let stream = event.streams && event.streams[0];
-            if (!stream) {
-                if (!remoteStreamsRef.current[targetSocketId]) {
-                    remoteStreamsRef.current[targetSocketId] = new MediaStream();
-                }
-                remoteStreamsRef.current[targetSocketId].addTrack(event.track);
-                stream = remoteStreamsRef.current[targetSocketId];
-            } else {
-                remoteStreamsRef.current[targetSocketId] = stream;
+            console.log(`Received track [${event.track.kind}] from ${targetSocketId}`);
+            if (!remoteStreamsRef.current[targetSocketId]) {
+                remoteStreamsRef.current[targetSocketId] = new MediaStream();
             }
 
-            setVideos((prevVideos) => {
-                const exists = prevVideos.find((v) => v.socketId === targetSocketId);
-                if (exists) {
-                    return prevVideos.map((v) =>
-                        v.socketId === targetSocketId ? { ...v, stream } : v
-                    );
-                } else {
-                    return [...prevVideos, { socketId: targetSocketId, stream }];
+            const currentStream = remoteStreamsRef.current[targetSocketId];
+
+            if (event.streams && event.streams[0]) {
+                event.streams[0].getTracks().forEach((track) => {
+                    if (!currentStream.getTracks().some((t) => t.id === track.id)) {
+                        currentStream.addTrack(track);
+                    }
+                });
+            } else if (event.track) {
+                if (!currentStream.getTracks().some((t) => t.id === event.track.id)) {
+                    currentStream.addTrack(event.track);
                 }
+            }
+
+            // Fresh MediaStream instance guarantees React re-render and video decoder re-attachment
+            const newStream = new MediaStream(currentStream.getTracks());
+
+            setVideos((prevVideos) => {
+                const filtered = prevVideos.filter((v) => v.socketId !== targetSocketId);
+                return [...filtered, { socketId: targetSocketId, stream: newStream }];
             });
         };
 
@@ -756,13 +753,16 @@ export default function VideoMeetComponent() {
         setMessage("");
     };
 
-    const connect = () => {
+    const connect = async () => {
         const trimmed = username.trim();
         if (!trimmed) {
             setUsernameError("Please enter your name to join the call");
             return;
         }
         setUsernameError("");
+        if (!window.localStream) {
+            await getPermissions();
+        }
         setAskForUsername(false);
         getMedia();
     };
