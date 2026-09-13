@@ -24,9 +24,7 @@ const videoHDConstraints = {
 const audioHDConstraints = {
     echoCancellation: true,
     noiseSuppression: true,
-    autoGainControl: true,
-    sampleRate: 48000,
-    channelCount: 2
+    autoGainControl: true
 };
 
 // Maximize peer connection bitrate for crystal-clear HD video (4 Mbps)
@@ -138,6 +136,66 @@ export default function VideoMeetComponent() {
     const [username, setUsername] = useState("");
     const [usernameError, setUsernameError] = useState("");
     const [videos, setVideos] = useState([]);
+    const [micLevel, setMicLevel] = useState(0);
+
+    // Live microphone audio visualizer for lobby
+    useEffect(() => {
+        if (!askForUsername || !audio) {
+            setMicLevel(0);
+            return;
+        }
+
+        let audioContext;
+        let analyser;
+        let source;
+        let animId;
+
+        const startMeter = () => {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx || !window.localStream) return;
+                const audioTracks = window.localStream.getAudioTracks();
+                if (!audioTracks || audioTracks.length === 0) return;
+
+                audioContext = new AudioCtx();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 64;
+                const tempStream = new MediaStream([audioTracks[0]]);
+                source = audioContext.createMediaStreamSource(tempStream);
+                source.connect(analyser);
+
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                const updateMeter = () => {
+                    analyser.getByteFrequencyData(dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < dataArray.length; i++) {
+                        sum += dataArray[i];
+                    }
+                    const avg = sum / dataArray.length;
+                    setMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
+                    animId = requestAnimationFrame(updateMeter);
+                };
+
+                updateMeter();
+            } catch (e) {
+                console.log("Mic visualizer note:", e);
+            }
+        };
+
+        const timer = setTimeout(startMeter, 500);
+
+        return () => {
+            clearTimeout(timer);
+            if (animId) cancelAnimationFrame(animId);
+            if (source) {
+                try { source.disconnect(); } catch {}
+            }
+            if (audioContext && audioContext.state !== "closed") {
+                audioContext.close().catch(() => {});
+            }
+        };
+    }, [askForUsername, audio]);
 
     // Check authentication: If no valid token, redirect to /auth immediately
     useEffect(() => {
@@ -394,8 +452,14 @@ export default function VideoMeetComponent() {
     };
 
     const getMedia = () => {
-        setVideo(videoAvailable);
-        setAudio(audioAvailable);
+        if (window.localStream) {
+            window.localStream.getAudioTracks().forEach(track => {
+                track.enabled = audio;
+            });
+            window.localStream.getVideoTracks().forEach(track => {
+                track.enabled = video;
+            });
+        }
         connectToSocketServer();
     };
 
@@ -705,7 +769,14 @@ export default function VideoMeetComponent() {
                             />
                             <div className={styles.lobbyPreviewOverlay}>
                                 <span className={styles.previewBadge}>
-                                    {video ? "Camera On" : "Camera Off"} • {audio ? "Mic On" : "Mic Muted"}
+                                    {video ? "Camera On" : "Camera Off"} • {audio ? (micLevel > 4 ? "Mic Active (Speaking 🟢)" : "Mic On") : "Mic Muted"}
+                                    {audio && (
+                                        <span style={{ display: "inline-flex", alignItems: "center", gap: "2px", marginLeft: "6px", verticalAlign: "middle" }}>
+                                            <span style={{ width: "3px", height: `${Math.max(4, Math.min(18, micLevel * 0.25))}px`, backgroundColor: micLevel > 4 ? "#46d362" : "#8b949e", borderRadius: "1px" }} />
+                                            <span style={{ width: "3px", height: `${Math.max(4, Math.min(22, micLevel * 0.35))}px`, backgroundColor: micLevel > 4 ? "#46d362" : "#8b949e", borderRadius: "1px" }} />
+                                            <span style={{ width: "3px", height: `${Math.max(4, Math.min(16, micLevel * 0.2))}px`, backgroundColor: micLevel > 4 ? "#46d362" : "#8b949e", borderRadius: "1px" }} />
+                                        </span>
+                                    )}
                                 </span>
                                 <div>
                                     <IconButton
@@ -815,6 +886,7 @@ export default function VideoMeetComponent() {
                                         ref={(ref) => {
                                             if (ref && remote.stream && ref.srcObject !== remote.stream) {
                                                 ref.srcObject = remote.stream;
+                                                ref.play().catch(e => console.log("Remote audio/video play note:", e));
                                             }
                                         }}
                                         autoPlay
