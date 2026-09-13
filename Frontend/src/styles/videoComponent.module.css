@@ -381,17 +381,185 @@
   background: #e68528;
 }
 
-@media (max-width: 600px) {
+/* ================= MOBILE RESPONSIVE ================= */
+@media (max-width: 768px) {
+  .videoStage {
+    height: calc(100vh - 76px);
+    padding: 10px;
+  }
+
+  .conferenceView {
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .videoTile {
+    min-height: 180px;
+    border-radius: 12px;
+  }
+
+  .buttonContainers {
+    bottom: max(14px, env(safe-area-inset-bottom, 14px));
+    padding: 6px 14px;
+    gap: 8px;
+  }
+
+  .chatRoom {
+    right: 12px;
+    top: 12px;
+    bottom: 80px;
+    width: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Lobby Mobile */
+  .lobbyWrapper {
+    padding: 16px 12px;
+    align-items: flex-start;
+    padding-top: max(20px, env(safe-area-inset-top, 20px));
+  }
+
+  .lobbyCard {
+    padding: 20px 14px;
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .lobbyTitle {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+
+  .lobbySubtitle {
+    font-size: 13px;
+  }
+
+  .lobbyPreview {
+    height: clamp(180px, 28vh, 230px);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+
+  .lobbyPreviewOverlay {
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+
+  .previewBadge {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  /* Meeting Room Mobile */
+  .videoStage {
+    height: calc(100vh - 72px);
+    padding: 6px;
+  }
+
+  .conferenceView {
+    gap: 6px;
+    grid-template-columns: 1fr;
+    grid-auto-rows: 1fr;
+  }
+
+  .videoTile {
+    min-height: 140px;
+    border-radius: 10px;
+  }
+
+  .tileLabel {
+    bottom: 8px;
+    left: 8px;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  /* Controls Mobile (Thumb friendly, never overflowing) */
+  .buttonContainers {
+    bottom: max(10px, env(safe-area-inset-bottom, 10px));
+    width: calc(100% - 20px);
+    max-width: 360px;
+    padding: 5px 8px;
+    gap: 6px;
+    justify-content: space-evenly;
+    border-radius: 28px;
+  }
+
+  .controlBtn {
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+  }
+
+  .controlBtn svg {
+    font-size: 19px !important;
+  }
+
+  .endCallBtn {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+
+  .endCallBtn svg {
+    font-size: 20px !important;
+  }
+
+  /* Mobile Chat Bottom-Sheet Drawer */
   .chatRoom {
     right: 0;
     left: 0;
     top: auto;
-    bottom: 80px;
+    bottom: 0;
     width: 100%;
-    height: 60vh;
-    border-radius: 16px 16px 0 0;
+    height: 72vh;
+    max-height: 85vh;
+    border-radius: 20px 20px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.75);
+    z-index: 100;
   }
-  .conferenceView {
-    grid-template-columns: 1fr;
+
+  .chatHeader {
+    padding: 12px 16px;
+  }
+
+  .chatHeaderTitle {
+    font-size: 14px;
+  }
+
+  .chattingDisplay {
+    padding: 10px 12px;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .messageCard {
+    max-width: 92%;
+    padding: 7px 10px;
+  }
+
+  .messageText {
+    font-size: 12.5px;
+  }
+
+  .chattingArea {
+    padding: 10px 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  }
+
+  .chattingArea input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .chattingArea button {
+    padding: 8px 12px;
+    font-size: 12px;
   }
 }
